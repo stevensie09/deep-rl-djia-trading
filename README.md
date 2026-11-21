@@ -35,7 +35,7 @@ Out-of-sample trading on 101 test quarters (Oct 2000 – Dec 2025), averaged ove
 ### Idea 1: FTA doesn't make learning measurably more stable (`4_fta_stability.ipynb`)
 
 - **Seed agreement:** across the 101 test quarters, the 5 seeds disagree about as much with FTA as without. The spread of quarterly returns changes by −10% (DDPG) to +2% (PPO), and no difference is significant (paired Wilcoxon, smallest p = 0.06 for DDPG).
-- **Validation:** validation Sharpe ratios vary just as much (all p > 0.8).
+- **Validation:** validation Sharpe ratios vary just as much (no difference is significant, all p > 0.25).
 - **Performance:** FTA doesn't help either. Ensemble Sharpe is 0.48 against 0.50; DDPG falls from 0.45 to 0.37.
 - **DDPG**, the agent closest to the FTA paper's setup, is the only one with a small hint of more stability.
 
@@ -53,11 +53,11 @@ Out-of-sample trading on 101 test quarters (Oct 2000 – Dec 2025), averaged ove
 
 ### Investigation: why? (`6_investigation.ipynb`)
 
-- **The agents learn to hold the market, not to beat it.** They stay almost fully invested in about 17 stocks, beat a random agent (Sharpe 0.37) but not 1/N (0.53) or the DJIA (0.55). Training up to 3× the paper's steps doesn't change that.
+- **The agents learn to hold the market, not to beat it.** They stay almost fully invested in about 17 stocks, beat a random agent (Sharpe 0.37) but not 1/N (0.53) or the DJIA (0.55). Training for up to 3× as many steps doesn't change that.
 - **Choosing an agent is no better than guessing.** Validation Sharpe has no relation to the next quarter's (rank correlation about 0). The picked agent is the best one 35% of the time (guessing: 33%), and a random pick does as well as the ensemble.
 - **Market noise dwarfs seed noise.** With 20 seeds, the seed-to-seed spread of the 2016–2025 Sharpe ratio is 0.08; the market uncertainty of that number is about 0.31. Over 25 years no strategy differs significantly from the DJIA.
 - **Old data isn't the problem.** Training on only the last 5 years gives the same results.
-- **The crash rule sells after the fall and misses the rebound.** The DJIA has already dropped about 2% before a turbulence signal and gains about 3.3% in the 60 days after. No threshold or gentler rule (half, volatility scaling) beats doing nothing on return. Puts paid back only 39–72 cents per dollar of premium.
+- **The crash rule sells after the fall and misses the rebound.** The DJIA has already dropped about 2% before a turbulence signal and gains about 3.3% in the 60 days after. Only puts at the 99.5th-percentile threshold edge past doing nothing on return (8.4% against 8.2% a year, a gap within noise); no other threshold or gentler rule (half, volatility scaling) does. Puts paid back only 39–72 cents per dollar of premium.
 - **FTA, 20 seeds:** the narrower spread seen with 5 seeds was chance (p = 0.58). FTA agents do track the DJIA slightly more closely.
 
 ## How to run
@@ -71,7 +71,7 @@ pip install -r requirements.txt
 | `1_data_collection.ipynb` | Downloads DJIA members, prices, VIX and the T-bill rate from WRDS (CRSP, CBOE, Fama-French) | `data/*.parquet` |
 | `2_features.ipynb` | MACD, RSI, CCI, ADX per stock, market features (turbulence, VIX, …), walk-forward folds | `data/asset_features.parquet`, `data/market_features.parquet`, `data/folds.csv` |
 | `python3 train.py` | Trains A2C, PPO and DDPG for 101 quarters × 5 seeds × {baseline, FTA, 5-year rolling window}, plus seeds 5–19 for baseline and FTA from 2016 (~7 h on 10 cores) | `models/`, `results/validation.csv` |
-| `python3 curves.py` | Learning curves: 5 folds × 3 seeds trained to 3× the paper's steps (~40 min) | `results/curves.csv` |
+| `python3 curves.py` | Learning curves: 5 folds × 3 seeds trained to 3× the base training steps (~40 min) | `results/curves.csv` |
 | `python3 backtest.py` | Trades every test quarter in order, for every strategy and crash rule, plus a sweep of crash rules, thresholds and fees (~20 min) | `results/backtest.parquet`, `results/sweep.parquet`, `results/baselines.parquet` |
 | `3_baseline.ipynb` | Phase 2: the paper's ensemble vs. single agents, DJIA and min-variance | |
 | `4_fta_stability.ipynb` | Idea 1: FTA vs. baseline | |
@@ -96,17 +96,17 @@ pip install -r requirements.txt
 
 **Walk-forward (as in the paper).** Every quarter, the agents are trained from scratch on all data since 2000. Each is scored on the next 3 months (validation Sharpe), and the best one trades the quarter after that (test). The portfolio carries over from quarter to quarter. The first test quarter is Oct 2000, which gives 101 test quarters up to Dec 2025.
 
-**Agents.** A2C (10k steps), PPO (50k) and DDPG (20k, Ornstein-Uhlenbeck noise σ = 0.5): the paper's training steps, stable-baselines3 defaults, 64×64 networks.
+**Agents.** A2C (10k steps), PPO (50k) and DDPG (20k, Ornstein-Uhlenbeck noise σ = 0.5): the training steps in the authors' public code in early October 2020 (the paper's text doesn't state them, and the authors later switched to 30k, 100k and 10k), stable-baselines3 defaults, 64×64 networks.
 
 **Trading environment.** Same 181-number state layout as the paper: cash, 30 prices, 30 holdings, then MACD, RSI, CCI and ADX for each of the 30 stocks. They're expressed scale-free so the networks (and FTA) see numbers around ±1: cash as a share of the portfolio, prices as daily returns, holdings as portfolio weights, and fixed scalings for the indicators. Each trade costs 0.1%. The agent sees the market after the close and trades at the *next* day's close. When a stock leaves the DJIA, it's sold and the newcomer takes its slot.
 
-**Turbulence rule (paper).** The threshold is the 99th percentile of past turbulence, or the 90th if the last quarter was already turbulent. It's computed from training data only.
+**Turbulence rule (authors' code).** The threshold is the 99th percentile of past turbulence, or the 90th if the last quarter was already turbulent. It's computed from training data only. This follows the authors' code in early October 2020; their later version uses the historical maximum in calm periods instead of the 99th percentile.
 
 ## Differences from the paper
 
 | | Paper | Here | Why |
 |---|---|---|---|
-| Stocks | today's 30 DJIA stocks, 2009–2020 | DJIA members of each day, 2000–2025 | no survivorship bias, longer test |
+| Stocks | the 30 DJIA members on 1 Jan 2016, held fixed, 2009–2020 | DJIA members of each day, 2000–2025 | no survivorship bias, longer test |
 | Prices | adjusted close, no dividends | CRSP total returns | dividends and delistings are real money |
 | Timing | trades at the close it just saw | trades at the next close | no look-ahead |
 | State | raw $ and share counts | same 181 values, scaled | neural networks (and FTA's fixed tile range) need inputs around ±1 |
@@ -120,3 +120,6 @@ pip install -r requirements.txt
 - The puts are priced with Black-Scholes at VIX volatility, not with real option quotes. VIX is usually a bit above at-the-money implied volatility, so this tends to overstate the cost of insurance.
 - The first folds train on only a few months of data (first test quarter Oct 2000).
 - 5 seeds per setting for the full 2000–2025 period (20 seeds from 2016). Section 3 of `6_investigation.ipynb` shows that seed noise is small next to market noise.
+- The differences from the paper were changed together, so this project can't say which one causes the gap to the paper's result.
+- The DJIA, 1/N and min-variance benchmarks pay no trading costs, while the agents pay 0.1% per trade. Even with zero fees, the ensemble's Sharpe ratio is 0.53, still below the DJIA's 0.55.
+- Cash earns no interest in the simulation. The sell rule holds 11.9% cash on average, and paying it the T-bill rate would lift its annual return from 5.6% to 5.9%.
