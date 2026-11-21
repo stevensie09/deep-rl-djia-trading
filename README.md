@@ -1,5 +1,13 @@
 # Deep RL stock trading on the DJIA: stability with FTA, and options instead of closing out
 
+> **About this repository**
+>
+> This is a fork of our three-person university group project for the Financial Engineering and Analytics course (November 2026). The original repository is [byerken/deep-rl-djia-trading](https://github.com/byerken/deep-rl-djia-trading), and its full commit history is kept here.
+>
+> **In short:** we tested whether a published deep reinforcement learning trading strategy (Yang et al., 2020) beats the Dow Jones. On 25 years of point-in-time data with realistic trading rules, it did not. Its Sharpe ratio was 0.43 against 0.55 for the Dow over 2000–2025, and 0.56 against the paper's reported 1.30 over the paper's own 2016–2020 test period.
+>
+> **My role:** the team worked on every part together. I helped decide what to replicate and which extensions to test, contributed to the code through AI-assisted development with Claude, analysed the results, and worked on the written report, slides and presentation script.
+
 DSC4107 project. We reproduce the ensemble strategy of
 **Yang, Liu, Zhong & Walid (2020), "Deep Reinforcement Learning for Automated Stock Trading: An Ensemble Strategy"**
 on 25 years of point-in-time DJIA data, then test two ideas on top of it:
